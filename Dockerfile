@@ -57,7 +57,8 @@ ENV vars to help uChrome
 
 =========================
 
-ENV GOOGLE_CHROME_BIN="/usr/bin/google-chrome" ENV CHROME_BIN="/usr/bin/google-chrome"
+ENV GOOGLE_CHROME_BIN="/usr/bin/google-chrome" 
+ENV CHROME_BIN="/usr/bin/google-chrome"
 
 Optional: Expose port if needed
 
