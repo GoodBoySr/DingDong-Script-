@@ -1,14 +1,16 @@
 import os
 import time
 import discord
-from discord.ext import commands
 import undetected_chromedriver as uc
+from discord import app_commands
+from discord.ext import commands
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='/', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
+tree = bot.tree  # for app commands
 
 def setup_driver():
     options = uc.ChromeOptions()
@@ -81,19 +83,25 @@ def bypass_process(original_url):
 
 @bot.event
 async def on_ready():
-    print(f'✅ Bot online as {bot.user}')
+    print(f"✅ Bot online as {bot.user}")
+    try:
+        synced = tree.sync()
+        print(f"🔁 Synced {len(synced)} slash command(s)")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
 
-@bot.command()
-async def bypass(ctx, link: str):
-    await ctx.author.send("💫May take 10-60 Seconds to process, because of complexity of site")
+@tree.command(name="bypass", description="Bypass a protected link and get final URL")
+@app_commands.describe(link="The link to bypass (e.g., auth.platorelay.com)")
+async def bypass_command(interaction: discord.Interaction, link: str):
+    await interaction.response.send_message("💫May take 10-60 Seconds to process, because of complexity of site", ephemeral=True)
 
     try:
         result, duration = bypass_process(link)
-        await ctx.author.send(f"| Results: {result} Time: {duration:.2f} seconds |")
-        await ctx.send(f"| Done {ctx.author.mention} | Bot: Dingdong |")
+        await interaction.user.send(f"| Results: {result} Time: {duration:.2f} seconds |")
+        await interaction.channel.send(f"| Done <@{interaction.user.id}> | Bot: Dingdong |")
     except Exception as e:
-        await ctx.author.send(f"❌ Error: {e}")
-        await ctx.send(f"| Failed {ctx.author.mention} | Bot: Dingdong |")
+        await interaction.user.send(f"❌ Error: {e}")
+        await interaction.channel.send(f"| Failed <@{interaction.user.id}> | Bot: Dingdong |")
 
 if __name__ == "__main__":
     bot.run(os.environ["DISCORD_BOT_TOKEN"])
