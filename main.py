@@ -6,150 +6,162 @@ from discord import app_commands
 from discord.ext import commands
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import traceback
+import logging
 
-# Discord bot setup
+# === Configuration ===
+DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+AI_KEY = os.getenv("AI_KEY")
+
+# === Logging setup ===
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# === Discord Bot Initialization ===
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-# Fake fingerprint options
+# === AI ERROR RECOVERY PLACEHOLDER ===
+def ai_auto_fix(error_message):
+    if not AI_KEY:
+        return "AI auto-fix skipped: AI_KEY not configured."
+    # Placeholder for real AI call
+    logging.warning("ðŸ§  AI DEBUG: Attempting auto-fix using AI...")
+    # Simulate AI debugging response
+    return f"AI suggestion: Wait longer or refresh the page if '{error_message}' appears."
+
+# === SUPER STEALTH CHROME SETUP ===
 def setup_driver():
     options = uc.ChromeOptions()
     options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--lang=en-US")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
-
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114 Safari/537.36")
+    options.add_argument("--lang=en-US,en;q=0.9")
     caps = DesiredCapabilities.CHROME
     caps["goog:loggingPrefs"] = {"performance": "ALL"}
+    return uc.Chrome(options=options, desired_capabilities=caps)
 
-    driver = uc.Chrome(options=options, desired_capabilities=caps)
-    return driver
-
-# ⛩️ AI-assisted logic placeholder (expand if you connect AI_KEY)
-def ai_helper(prompt):
-    ai_key = os.getenv("AI_KEY")
-    if not ai_key:
-        return "AI not enabled. Add AI_KEY to environment variables."
-    # Placeholder for actual AI interaction
-    return "AI Helper: If you're stuck, try waiting or switching IP!"
-
-# Core bypass logic
+# === Bypass Function ===
 def bypass_process(original_url):
     start_time = time.time()
     driver = setup_driver()
+    result = "âŒ Unknown error"
 
     try:
-        # Step 1: Go to original URL
         driver.get(original_url)
-        time.sleep(6)
+        logging.info("ðŸ”— Opened original link.")
+        time.sleep(5)
 
-        # Step 2: Wait for Cloudflare to finish
+        # Wait for Cloudflare or similar checks
+        for _ in range(30):
+            if "Verifying" not in driver.page_source and "cloudflare" not in driver.page_source.lower():
+                break
+            logging.info("ðŸ›¡ï¸ Waiting out Cloudflare...")
+            time.sleep(2)
+
+        # Click first continue button
+        try:
+            continue_button = driver.find_element(By.XPATH, '//button[contains(text(),"continue") and @style="background-color: white;"]')
+            continue_button.click()
+            time.sleep(3)
+            logging.info("âœ… Clicked continue.")
+        except:
+            logging.warning("âš ï¸ Continue button not found. Proceeding.")
+
+        redirected_url = driver.current_url
+        logging.info(f"ðŸ” Redirected to: {redirected_url}")
+
+        driver.get("https://bypass.city")
+        logging.info("ðŸŒ Opening bypass.city...")
+        time.sleep(5)
+
+        # Wait out Cloudflare again
         for _ in range(20):
             if "Verifying" not in driver.page_source and "cloudflare" not in driver.page_source.lower():
                 break
-            time.sleep(2)
-
-        # Step 3: Click the first "continue" white button
-        try:
-            button = driver.find_element(By.XPATH, '//button[contains(text(),"continue") and @style="background-color: white;"]')
-            button.click()
-            time.sleep(4)
-        except:
-            pass
-
-        # Step 4: Copy the redirected link
-        redirected_url = driver.current_url
-
-        # Step 5: Go to bypass.city
-        driver.get("https://bypass.city")
-        time.sleep(5)
-
-        # Wait for Cloudflare on bypass.city
-        for _ in range(15):
-            if "Verifying" not in driver.page_source and "cloudflare" not in driver.page_source.lower():
-                break
-            time.sleep(2)
             driver.refresh()
+            time.sleep(2)
 
-        # Step 6: Enter the URL and click "Bypass Link"
-        input_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@type="text"]')))
+        # Enter and bypass URL
+        input_box = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.XPATH, '//input[@type="text"]'))
+        )
         input_box.send_keys(redirected_url)
         time.sleep(1)
 
         bypass_btn = driver.find_element(By.XPATH, '//button[contains(text(),"Bypass Link")]')
         bypass_btn.click()
-        time.sleep(5)
+        logging.info("ðŸš€ Bypass link clicked.")
+        time.sleep(4)
 
-        # Step 7: Close any ad popups
-        main = driver.current_window_handle
+        # Close popups
+        main_win = driver.current_window_handle
         for win in driver.window_handles:
-            if win != main:
+            if win != main_win:
                 driver.switch_to.window(win)
                 driver.close()
-        driver.switch_to.window(main)
+        driver.switch_to.window(main_win)
 
-        # Step 8: Wait for and get result
+        # Get result
         for _ in range(30):
             try:
                 result_input = driver.find_element(By.XPATH, '//input[@type="text"]')
-                copy_btn = driver.find_element(By.XPATH, '//button[contains(text(),"Copy Results/Url")]')
-                copy_btn.click()
                 result = result_input.get_attribute("value")
                 break
             except:
                 time.sleep(2)
-        else:
-            result = "❌ Failed to get result link. " + ai_helper("Why didn't bypass.city give a result?")
 
         time_taken = time.time() - start_time
         return result, time_taken
 
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("âŒ Exception occurred:\n" + tb)
+        ai_msg = ai_auto_fix(str(e))
+        return f"{str(e)} | {ai_msg}", time.time() - start_time
+
     finally:
         driver.quit()
 
-# Sync new slash commands and remove old ones
+# === Bot Ready ===
 @bot.event
 async def on_ready():
-    print(f"✅ Bot online as {bot.user}")
+    logging.info(f"âœ… Bot online as {bot.user}")
     try:
-        guilds = [g async for g in bot.fetch_guilds(limit=150)]
-        for guild in guilds:
-            await tree.clear_commands(guild=guild)
-            await tree.sync(guild=guild)
-            print(f"🧹 Synced & cleared in: {guild.name}")
+        await tree.sync()
+        logging.info("ðŸ“Œ Synced global slash commands.")
     except Exception as e:
-        print(f"❌ Command sync error: {e}")
+        logging.error("âŒ Sync error: " + str(e))
 
-# 🔧 Main bypass command
-@tree.command(name="bypass", description="Bypass a protected link (Cloudflare, ads, redirect)")
+# === Bypass Command ===
+@tree.command(name="bypass", description="ðŸšª Bypass links with heavy protection like Cloudflare & ads")
 @app_commands.describe(link="Paste the link to bypass")
-async def bypass_command(interaction: discord.Interaction, link: str):
-    await interaction.response.send_message("💫May take 10-60 Seconds to process, because of complexity of site", ephemeral=True)
+async def bypass_cmd(interaction: discord.Interaction, link: str):
+    await interaction.response.send_message("ðŸ’«May take 10-60 Seconds to process, because of complexity of site", ephemeral=True)
     try:
         result, duration = bypass_process(link)
         await interaction.user.send(f"| Results: {result} Time: {duration:.2f} seconds |")
         await interaction.channel.send(f"| Done <@{interaction.user.id}> | Bot: Dingdong |")
     except Exception as e:
-        await interaction.user.send(f"❌ Error: {e}")
+        await interaction.user.send(f"âŒ Error: {e}")
         await interaction.channel.send(f"| Failed <@{interaction.user.id}> | Bot: Dingdong |")
 
-# 🧪 Ping command
-@tree.command(name="ping", description="Check if Dingdong is alive 🟢")
+# === Ping ===
+@tree.command(name="ping", description="Check if bot is alive")
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("🏓 Pong! I'm alive.", ephemeral=True)
+    await interaction.response.send_message("ðŸ“ Pong!", ephemeral=True)
 
-# 🚀 Run bot using secret token
+# === Run Bot ===
 if __name__ == "__main__":
-    bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+    if DISCORD_TOKEN:
+        bot.run(DISCORD_TOKEN)
+    else:
+        print("âŒ DISCORD_BOT_TOKEN not set.")
