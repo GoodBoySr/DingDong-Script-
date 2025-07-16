@@ -1,4 +1,18 @@
-import os import time import discord import shutil import traceback import openai import undetected_chromedriver as uc from discord.ext import commands from discord import app_commands from selenium.webdriver.common.by import By from selenium.webdriver.common.keys import Keys from selenium.webdriver.support.ui import WebDriverWait from selenium.webdriver.support import expected_conditions as EC
+import os 
+import time 
+import discord 
+import shutil 
+import traceback 
+import openai 
+import undetected_chromedriver as uc 
+
+from discord.ext import commands 
+from discord import app_commands 
+
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.common.keys import Keys 
+from selenium.webdriver.support.ui import WebDriverWait 
+from selenium.webdriver.support import expected_conditions as EC
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN") AI_KEY = os.getenv("AI_KEY")  # For debugging via OpenAI
 
