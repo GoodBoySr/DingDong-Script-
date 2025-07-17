@@ -1,150 +1,141 @@
 import os
 import time
 import discord
-import shutil
 import traceback
 import openai
 import undetected_chromedriver as uc
-
 from discord.ext import commands
 from discord import app_commands
-
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 AI_KEY = os.getenv("AI_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree
+openai.api_key = AI_KEY
 
 def setup_driver():
-    chrome_path = shutil.which("google-chrome") or shutil.which("google-chrome-stable")
     options = uc.ChromeOptions()
-    if chrome_path:
-        options.binary_location = chrome_path
-
     options.add_argument("--headless=new")
+    options.add_argument("--disable-popup-blocking")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--lang=en-US")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114 Safari/537.36")
-
+    options.add_argument("--window-size=1280,800")
     return uc.Chrome(options=options)
 
-def ai_debug_report(error_text):
-    if not AI_KEY:
-        return "AI debug unavailable (no API key)"
+def switch_to_new_tab(driver):
+    if len(driver.window_handles) > 1:
+        driver.switch_to.window(driver.window_handles[-1])
+        time.sleep(2)
+
+def click_continue_button(driver):
     try:
-        openai.api_key = AI_KEY
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You're a Python and browser automation expert. Help diagnose errors."},
-                {"role": "user", "content": f"Here's the traceback:\n{error_text}"}
-            ]
+        WebDriverWait(driver, 8).until(
+            EC.presence_of_element_located((By.XPATH, '//button[contains(text(), "continue") and @style="background-color: white;"]'))
+        ).click()
+        time.sleep(3)
+        switch_to_new_tab(driver)
+    except Exception:
+        pass
+
+def bypass_city(driver, lootlabs_url):
+    driver.get("https://bypass.city")
+    time.sleep(3)
+    try:
+        input_box = WebDriverWait(driver, 8).until(
+            EC.presence_of_element_located((By.XPATH, '//input[@type="text"]'))
         )
-        return response.choices[0].message.content
+        input_box.send_keys(lootlabs_url)
+        input_box.send_keys(Keys.RETURN)
+        time.sleep(3)
+
+        # Wait for final result
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, '//button[contains(text(), "Copy Results/Url")]'))
+        ).click()
+
+        result = driver.find_element(By.XPATH, '//input[@type="text"]').get_attribute("value")
+        return result
     except Exception as e:
-        return f"AI failed: {str(e)}"
+        return f"❌ Failed to get result: {str(e)}"
 
-def bypass_link(original_url):
-    start = time.time()
-    driver = setup_driver()
-    result = "❌ Unknown error"
+@tree.command(name="bypass", description="Bypass Cloudflare + Loot/Vertise and get final link.")
+@app_commands.describe(link="Enter the protected link.")
+async def bypass_command(interaction: discord.Interaction, link: str):
+    await interaction.response.send_message("💫May take 10-60 Seconds to process, because of complexity of site", ephemeral=True)
+
+    start_time = time.time()
     try:
-        driver.get(original_url)
-        time.sleep(6)
+        driver = setup_driver()
+        driver.get(link)
+        time.sleep(4)
 
-        for _ in range(20):
-            if "Verifying" not in driver.page_source and "cloudflare" not in driver.page_source.lower():
-                break
+        while "cloudflare" in driver.page_source.lower():
             time.sleep(2)
+            driver.get(link)
 
+        click_continue_button(driver)
+        time.sleep(2)
+        switch_to_new_tab(driver)
+
+        loot_url = driver.current_url
+        final_result = bypass_city(driver, loot_url)
+
+        time_taken = time.time() - start_time
+
+        await interaction.user.send(f"| Results: {final_result} Time: {time_taken:.2f} seconds |")
+        await interaction.followup.send(f"| Done {interaction.user.mention} | Bot: Dingdong |", ephemeral=False)
+    except Exception as e:
+        error_msg = f"❌ Error: {str(e)}"
+        await interaction.user.send(error_msg)
+    finally:
         try:
-            continue_btn = driver.find_element(By.XPATH, '//button[contains(text(),"continue") and @style="background-color: white;"]')
-            continue_btn.click()
-            time.sleep(4)
+            driver.quit()
         except:
             pass
 
-        redirected = driver.current_url
-        if "auth.platorelay" in redirected:
-            raise Exception("Still stuck at auth.platorelay")
+@tree.command(name="test", description="AI-analyze a URL to see if it can be bypassed.")
+@app_commands.describe(link="The URL you want to test.")
+async def test_command(interaction: discord.Interaction, link: str):
+    await interaction.response.send_message("🧠 AI analyzing the link...", ephemeral=True)
+    try:
+        prompt = f"""
+You're a web security AI helping a bypass bot. Analyze the following URL:
+{link}
 
-        driver.get("https://bypass.city")
-        time.sleep(4)
+Check:
+- Is this a common ad/link shortener or cloudflare site?
+- Does it likely lead to a lootlabs/vertise-style page?
+- Is it worth processing or should it be rejected?
 
-        for _ in range(20):
-            if "Verifying" not in driver.page_source and "cloudflare" not in driver.page_source.lower():
-                break
-            driver.refresh()
-            time.sleep(2)
-
-        input_field = WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.XPATH, '//input[@type="text"]'))
+Respond with either:
+- ✅ VALID: Bypassable link.
+- ❌ INVALID: Not processable.
+With a short reason.
+"""
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
         )
-        input_field.send_keys(redirected)
-        input_field.send_keys(Keys.RETURN)
-        time.sleep(4)
-
-        # Close ad popups
-        main_win = driver.current_window_handle
-        for win in driver.window_handles:
-            if win != main_win:
-                driver.switch_to.window(win)
-                driver.close()
-        driver.switch_to.window(main_win)
-
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.XPATH, '//button[contains(text(),"Copy Results")]'))
-        ).click()
-
-        result_url = driver.find_element(By.XPATH, '//input[@type="text"]').get_attribute("value")
-        duration = time.time() - start
-        return result_url, duration
-
+        result = response.choices[0].message.content.strip()
+        await interaction.followup.send(f"🔍 AI Result: {result}", ephemeral=True)
     except Exception as e:
-        error_trace = traceback.format_exc()
-        ai_help = ai_debug_report(error_trace)
-        return f"❌ Error: {str(e)}\n\n🧠 AI Suggestion:\n{ai_help}", time.time() - start
-    finally:
-        driver.quit()
+        await interaction.followup.send(f"❌ AI failed to respond: {e}", ephemeral=True)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot online as {bot.user}")
     try:
-        await tree.sync()
-        print("📌 Slash commands synced.")
+        synced = await tree.sync()
+        print(f"✅ Synced {len(synced)} command(s).")
+        print(f"🤖 Bot online as {bot.user}")
     except Exception as e:
         print(f"❌ Command sync error: {e}")
 
-@tree.command(name="bypass", description="Bypass Cloudflare and ad redirects")
-@app_commands.describe(link="The link to bypass (e.g., auth.platorelay.com)")
-async def bypass(interaction: discord.Interaction, link: str):
-    await interaction.response.send_message("💫May take 10–60 seconds to process...", ephemeral=True)
-    try:
-        result, seconds = bypass_link(link)
-        await interaction.user.send(f"| Results: {result}\nTime: {seconds:.2f} seconds |")
-        await interaction.channel.send(f"| Done <@{interaction.user.id}> | Bot: Dingdong |")
-    except Exception as e:
-        await interaction.user.send(f"❌ Failed: {str(e)}")
-        await interaction.channel.send(f"| Failed <@{interaction.user.id}> | Bot: Dingdong |")
-
-@tree.command(name="ping", description="Simple ping command")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("🏓 Pong! I'm alive.", ephemeral=True)
-
-if __name__ == "__main__":
-    if TOKEN:
-        bot.run(TOKEN)
-    else:
-        print("❌ DISCORD_BOT_TOKEN not set in environment.")
+bot.run(TOKEN)
