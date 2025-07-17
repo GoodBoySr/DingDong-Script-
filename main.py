@@ -19,8 +19,8 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 AI_KEY = os.getenv("AI_KEY")
 
-# Setup logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s:%(message)s')
+# Setup logging to stdout
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s:%(message)s', handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
 
 intents = discord.Intents.default()
@@ -177,5 +177,12 @@ async def on_ready():
         logger.info(f"🤖 Bot online as {bot.user}")
     except Exception as e:
         logger.error(f"❌ Command sync error: {e}")
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    logger.error(f"An error occurred: {event}")
+    logger.error(f"Args: {args}")
+    logger.error(f"Kwargs: {kwargs}")
+    traceback.print_exc()
 
 bot.run(TOKEN)
