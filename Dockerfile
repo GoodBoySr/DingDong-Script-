@@ -21,6 +21,10 @@ RUN apt update && apt install -y \
 
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir \
-    discord.py selenium undetected-chromedriver openai
+    discord.py==2.3.2 \
+    undetected-chromedriver==3.5.5 \
+    selenium==4.15.2 \
+    openai==1.16.2 \
+    python-dotenv
 
 CMD ["python", "main.py"]
